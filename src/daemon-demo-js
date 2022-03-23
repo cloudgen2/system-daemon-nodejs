@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+
+const child_process = require('child_process')
+const fs = require('fs')
+
+const child = (exe, args, env) => {
+	let child = child_process.spawn(exe, args, {
+		detached: true,
+		stdio: ['ignore', 'ignore', 'ignore'],
+		env: env
+	})
+	child.unref()
+	return child
+}
+
+const daemonize = () => {
+	if (process.env.__daemon) {
+		return process.pid
+	}
+	process.env.__daemon = true
+	let args = [].concat(process.argv)
+	let node = args.shift()
+	let env = process.env
+	let ch = child(node, args, env)
+	console.log(`process_id of child process ${ch.pid}\n`)
+	fs.writeFileSync('/var/run/daemon-demo-js.pid', ch.pid + '\n')
+	return process.exit()
+}
+
+const sleep = (ms) => {
+	return new Promise( resolve => setTimeout( resolve, ms))
+}
+
+const main = async () => {
+	let i = 1
+	let uid = process.getuid()
+	let euid = process.geteuid()
+	if (uid == 0 || euid == 0){
+		daemonize()
+		fs.writeFileSync('/tmp/log-js.txt','')
+		while (true) {
+			await sleep( 10000 )
+			fs.appendFileSync('/tmp/log-js.txt', `Logging info.. ${i}\n`, (err) => { 
+				if (err) throw err 
+			})
+			i++
+		}
+	} else {
+		console.log(`You should run as root (uid=${uid}) (euid=${euid})\n`)
+		process.exit(1)
+	}
+}
+main()
+
